@@ -250,3 +250,211 @@ print(input_embeddings.shape)
 print(input_embeddings)
 
 # Input processing pipeline: input text => tokens => token IDs => token embeddings + positional embeddings => input embeddings
+
+##### tokenize only one pdf text
+import fitz  # PyMuPDF
+import re
+import tiktoken
+import torch
+
+def extract_text_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        # Extract raw text from each page
+        page_text = page.get_text("text")
+        text += page_text + "\n"
+    
+    # Basic ETL cleaning: remove multiple spaces, erratic newlines, and page artifacts
+    text = re.sub(r'\n+', '\n', text) 
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+# Extract your book
+pdf_text = extract_text_from_pdf("primer.pdf")
+
+# Use your existing function to create the DataLoader
+# For pretraining, stride typically matches max_length to avoid overlap redundancy
+max_length = 1024 # Matches GPT_CONFIG_124M context_length
+dataloader = create_dataloader_v1(
+    txt=pdf_text, 
+    batch_size=4, 
+    max_length=max_length, 
+    stride=max_length, 
+    shuffle=True
+)
+
+# Test the pipeline
+data_iter = iter(dataloader)
+inputs, targets = next(data_iter)
+print(f"Inputs shape: {inputs.shape}")   # Expected: [4, 1024]
+print(f"Targets shape: {targets.shape}") # Expected: [4, 1024]
+
+
+"""
+####### Hugging Face implementation ABSTRACTS ONLY #################
+from datasets import load_dataset
+import tiktoken
+import torch
+
+# 1. Load dataset in streaming mode (streams data over the network iteratively)
+dataset = load_dataset("ncbi/pubmed", split="train", streaming=True)
+
+# 2. Create a filter for computational neuroscience
+def is_neuro(example):
+    try:
+        # The HF dataset preserves the original XML hierarchy as nested JSON
+        abstract = example['MedlineCitation']['Article']['Abstract']['AbstractText']
+        if abstract:
+            text = abstract.lower()
+            return any(kw in text for kw in ["eeg", "neuro", "brain-computer", "fmri"])
+    except KeyError:
+        pass
+    return False
+
+# 3. Apply the filter to the stream
+neuro_stream = dataset.filter(is_neuro)
+
+# 4. Tokenize on the fly
+tokenizer = tiktoken.get_encoding("gpt2")
+
+def tokenize_stream(example):
+    abstract = example['MedlineCitation']['Article']['Abstract']['AbstractText']
+    tokens = tokenizer.encode(abstract, allowed_special={"<|endoftext|>"})
+    return {"token_ids": tokens}
+
+tokenized_stream = neuro_stream.map(tokenize_stream)
+
+# Test the stream (fetches and processes only the first valid article)
+first_article = next(iter(tokenized_stream))
+print(f"Token count: {len(first_article['token_ids'])}")
+
+import torch
+from torch.utils.data import IterableDataset, DataLoader
+
+class StreamPackingDataset(IterableDataset):
+    def __init__(self, tokenized_stream, max_length):
+        self.stream = tokenized_stream
+        self.max_length = max_length
+
+    def __iter__(self):
+        buffer = []
+        for example in self.stream:
+            # Pour the newly downloaded tokens into the buffer
+            buffer.extend(example["token_ids"])
+            
+            # When the buffer has enough tokens to form an input and a target
+            while len(buffer) >= self.max_length + 1:
+                # Slice out exactly what the model needs
+                chunk = buffer[:self.max_length + 1]
+                
+                # Keep the leftover tokens in the buffer for the next round
+                # Using stride = max_length to avoid redundant overlap during pretraining
+                buffer = buffer[self.max_length:] 
+                
+                # Create the shifted inputs and targets (just like Chapter 2)
+                x = torch.tensor(chunk[:-1], dtype=torch.long)
+                y = torch.tensor(chunk[1:], dtype=torch.long)
+                
+                yield x, y
+
+# 1. Instantiate the buffer using your tokenized Hugging Face stream
+iterable_dataset = StreamPackingDataset(tokenized_stream, max_length=1024)
+
+# 2. Wrap it in the standard PyTorch DataLoader
+# Note: drop_last and shuffle are not used with IterableDatasets in this way
+dataloader = DataLoader(iterable_dataset, batch_size=4)
+
+# 3. Test the pipeline
+data_iter = iter(dataloader)
+inputs, targets = next(data_iter)
+print(f"Inputs shape: {inputs.shape}")   # Will perfectly output [4, 1024]
+print(f"Targets shape: {targets.shape}") # Will perfectly output [4, 1024]
+
+#################### FULL-TEXT DATASET ##################
+import torch
+from torch.utils.data import IterableDataset, DataLoader
+from datasets import load_dataset
+import tiktoken
+
+# 1. Stream the PMC Full-Text Dataset
+# We use the 'commercial' split which contains ~3.84 million papers
+dataset = load_dataset("TomTBT/pmc_open_access_xml", split="commercial", streaming=True)
+
+# 2. Filter for Neurotechnology
+def is_neuro(example):
+    # The 'front' field contains the abstract and title strings
+    # We join them and use keyword matching to quickly filter the stream
+    try:
+        front_text = " ".join(example.get("front", [])).lower()
+        return any(kw in front_text for kw in [
+            "electroencephalography", "eeg", "brain-computer", 
+            "neural decoding", "fmri"
+        ])
+    except TypeError:
+        return False
+
+neuro_stream = dataset.filter(is_neuro)
+
+# 3. Extract and Tokenize Full Text
+tokenizer = tiktoken.get_encoding("gpt2")
+
+def extract_and_tokenize(example):
+    # The 'body' field is already a clean list of paragraph strings. 
+    # References are safely excluded by the dataset structure.
+    body_paragraphs = example.get("body", [])
+    
+    # Stitch the paragraphs together into one massive document
+    full_text = "\n\n".join(body_paragraphs)
+    
+    # Tokenize the entire paper (this could be 15,000+ tokens)
+    token_ids = tokenizer.encode(full_text, allowed_special={"<|endoftext|>"})
+    
+    # Append the End-Of-Text token so the model learns when a paper finishes
+    token_ids.append(tokenizer.eot_token)
+    
+    return {"token_ids": token_ids}
+
+tokenized_stream = neuro_stream.map(extract_and_tokenize)
+
+# 4. The Packing IterableDataset
+class StreamPackingDataset(IterableDataset):
+    def __init__(self, tokenized_stream, max_length):
+        self.stream = tokenized_stream
+        self.max_length = max_length
+
+    def __iter__(self):
+        buffer = []
+        for example in self.stream:
+            # Pour the massive full-text token list into the buffer
+            buffer.extend(example["token_ids"])
+            
+            # Continuously slice exactly 1,025 tokens from the buffer
+            while len(buffer) >= self.max_length + 1:
+                chunk = buffer[:self.max_length + 1]
+                
+                # Pop the used tokens off the front. 
+                # This naturally bridges paper boundaries: the end of Paper A 
+                # and the start of Paper B will sit in the same context window, 
+                # separated only by the <|endoftext|> token.
+                buffer = buffer[self.max_length:] 
+                
+                x = torch.tensor(chunk[:-1], dtype=torch.long)
+                y = torch.tensor(chunk[1:], dtype=torch.long)
+                
+                yield x, y
+
+# 5. Initialize the DataLoader
+max_length = 1024 # Matches your GPT_CONFIG_124M context_length
+iterable_dataset = StreamPackingDataset(tokenized_stream, max_length=max_length)
+dataloader = DataLoader(iterable_dataset, batch_size=4)
+
+# 6. Test the Pipeline
+if __name__ == "__main__":
+    data_iter = iter(dataloader)
+    inputs, targets = next(data_iter)
+    
+    print(f"Inputs shape: {inputs.shape}")   # Expected: [4, 1024]
+    print(f"Targets shape: {targets.shape}") # Expected: [4, 1024]
+
+"""
