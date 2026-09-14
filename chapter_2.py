@@ -250,7 +250,7 @@ print(input_embeddings.shape)
 print(input_embeddings)
 
 # Input processing pipeline: input text => tokens => token IDs => token embeddings + positional embeddings => input embeddings
-
+"""
 ##### tokenize only one pdf text
 import fitz  # PyMuPDF
 import re
@@ -291,7 +291,7 @@ print(f"Inputs shape: {inputs.shape}")   # Expected: [4, 1024]
 print(f"Targets shape: {targets.shape}") # Expected: [4, 1024]
 
 
-"""
+
 ####### Hugging Face implementation ABSTRACTS ONLY #################
 from datasets import load_dataset
 import tiktoken
