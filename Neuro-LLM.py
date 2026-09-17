@@ -5,7 +5,7 @@ import numpy as np
 from datasets import load_dataset
 from torch.utils.data import IterableDataset, DataLoader
 
-# Import your architecture from Chapter 4
+# Import architecture from Chapter 4
 from chapter_4 import GPTModel 
 
 # ==========================================
@@ -38,7 +38,7 @@ def is_neuro(example):
     try:
         front_text = " ".join(example.get("front", [])).lower()
         return any(kw in front_text for kw in [
-            "electroencephalography", "eeg", "brain-computer", "neural decoding"
+            "electroencephalography", "eeg", "brain-computer", "neural decoding", "bci", "neurotechnology", "neuroscience", "neuroprosthetics", "neuroergonomics", "fMRI", "deep brain stimulation", "neuroplasticity"
         ])
     except TypeError:
         return False
@@ -202,9 +202,6 @@ def load_weights_into_gpt(gpt, params):
     gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
 
-# Download the helper script dynamically
-url = "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch05/01_main-chapter-code/gpt_download.py"
-urllib.request.urlretrieve(url, "gpt_download.py")
 from gpt_download import download_and_load_gpt2
 
 # ==========================================
