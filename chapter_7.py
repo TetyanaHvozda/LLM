@@ -339,7 +339,8 @@ for inputs, targets in train_loader:
 # Loading a pre-trained LLM
 
 from gpt_download import download_and_load_gpt2
-from previous_chapters import GPTModel, load_weights_into_gpt
+from chapter_4 import GPTModel 
+from chapter_5 import load_weights_into_gpt
 # If the `previous_chapters.py` file is not available locally,
 # you can import it from the `llms-from-scratch` PyPI package.
 # For details, see: https://github.com/rasbt/LLMs-from-scratch/tree/main/pkg
