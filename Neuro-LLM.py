@@ -67,7 +67,7 @@ class StreamPackingDataset(IterableDataset):
                 yield x, y
 
 # Initialize the stream
-dataset = load_dataset("TomTBT/pmc_open_access_xml", split="commercial", streaming=True)
+dataset = load_dataset("TomTBT/pmc_open_access_xml", "commercial", split="train", streaming=True)
 neuro_stream = dataset.filter(is_neuro).map(extract_and_tokenize)
 train_loader = DataLoader(StreamPackingDataset(neuro_stream, max_length=1024), batch_size=2)
 # For a real run, you would create a separate validation stream. 
