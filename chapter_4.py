@@ -1,4 +1,7 @@
 import torch
+import torch.nn as nn
+import tiktoken
+from chapter_3 import MultiHeadAttention
 
 # Configurations for the 124 million parameter GPT-2 model
 GPT_CONFIG_124M = {
@@ -11,10 +14,6 @@ GPT_CONFIG_124M = {
     "qkv_bias": False       # Query-Key-Value bias
 }
 
-import torch
-import torch.nn as nn
-
-
 class DummyGPTModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -22,11 +21,9 @@ class DummyGPTModel(nn.Module):
         self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
         self.drop_emb = nn.Dropout(cfg["drop_rate"])
         
-        # Use a placeholder for TransformerBlock
         self.trf_blocks = nn.Sequential(
             *[DummyTransformerBlock(cfg) for _ in range(cfg["n_layers"])])
         
-        # Use a placeholder for LayerNorm
         self.final_norm = DummyLayerNorm(cfg["emb_dim"])
         self.out_head = nn.Linear(
             cfg["emb_dim"], cfg["vocab_size"], bias=False
@@ -43,73 +40,19 @@ class DummyGPTModel(nn.Module):
         logits = self.out_head(x)
         return logits
 
-
 class DummyTransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        # A simple placeholder
 
     def forward(self, x):
-        # This block does nothing and just returns its input.
         return x
-
 
 class DummyLayerNorm(nn.Module):
     def __init__(self, normalized_shape, eps=1e-5):
         super().__init__()
-        # The parameters here are just to mimic the LayerNorm interface.
 
     def forward(self, x):
-        # This layer does nothing and just returns its input.
         return x
-
-import tiktoken
-
-tokenizer = tiktoken.get_encoding("gpt2")
-
-batch = []
-
-txt1 = "Every effort moves you"
-txt2 = "Every day holds a"
-
-batch.append(torch.tensor(tokenizer.encode(txt1)))
-batch.append(torch.tensor(tokenizer.encode(txt2)))
-batch = torch.stack(batch, dim=0)
-print(batch)
-
-torch.manual_seed(123)
-model = DummyGPTModel(GPT_CONFIG_124M)
-
-logits = model(batch)
-print("Output shape:", logits.shape)
-print(logits)
-
-torch.manual_seed(123)
-
-# create 2 training examples with 5 dimensions (features) each
-batch_example = torch.randn(2, 5) 
-
-layer = nn.Sequential(nn.Linear(5, 6), nn.ReLU())
-out = layer(batch_example)
-print(out)
-
-mean = out.mean(dim=-1, keepdim=True)
-var = out.var(dim=-1, keepdim=True)
-
-print("Mean:\n", mean)
-print("Variance:\n", var)
-
-out_norm = (out - mean) / torch.sqrt(var)
-print("Normalized layer outputs:\n", out_norm)
-
-mean = out_norm.mean(dim=-1, keepdim=True)
-var = out_norm.var(dim=-1, keepdim=True)
-print("Mean:\n", mean)
-print("Variance:\n", var)
-
-torch.set_printoptions(sci_mode=False)
-print("Mean:\n", mean)
-print("Variance:\n", var)
 
 class LayerNorm(nn.Module):
     def __init__(self, emb_dim):
@@ -123,13 +66,6 @@ class LayerNorm(nn.Module):
         var = x.var(dim=-1, keepdim=True, unbiased=False)
         norm_x = (x - mean) / torch.sqrt(var + self.eps)
         return self.scale * norm_x + self.shift
-
-ln = LayerNorm(emb_dim=5)
-out_ln = ln(batch_example)
-mean = out_ln.mean(dim=-1, keepdim=True)
-var = out_ln.var(dim=-1, unbiased=False, keepdim=True)
-print("Mean:\n", mean)
-print("Variance:\n", var)
 
 class GELU(nn.Module):
     def __init__(self):
@@ -153,16 +89,6 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
-print(GPT_CONFIG_124M["emb_dim"])
-
-ffn = FeedForward(GPT_CONFIG_124M)
-
-# input shape: [batch_size, num_token, emb_size]
-x = torch.rand(2, 3, 768) 
-out = ffn(x)
-print(out.shape)
-
-# Adding shortcut connections
 class ExampleDeepNeuralNetwork(nn.Module):
     def __init__(self, layer_sizes, use_shortcut):
         super().__init__()
@@ -177,46 +103,23 @@ class ExampleDeepNeuralNetwork(nn.Module):
 
     def forward(self, x):
         for layer in self.layers:
-            # Compute the output of the current layer
             layer_output = layer(x)
-            # Check if shortcut can be applied
             if self.use_shortcut and x.shape == layer_output.shape:
                 x = x + layer_output
             else:
                 x = layer_output
         return x
 
-
 def print_gradients(model, x):
-    # Forward pass
     output = model(x)
     target = torch.tensor([[0.]])
-
-    # Calculate loss based on how close the target
-    # and output are
     loss = nn.MSELoss()
     loss = loss(output, target)
-    
-    # Backward pass to calculate the gradients
     loss.backward()
 
     for name, param in model.named_parameters():
         if 'weight' in name:
-            # Print the mean absolute gradient of the weights
             print(f"{name} has gradient mean of {param.grad.abs().mean().item()}")
-
-
-layer_sizes = [3, 3, 3, 3, 3, 1]  
-
-sample_input = torch.tensor([[1., 0., -1.]])
-torch.manual_seed(123)
-model_with_shortcut = ExampleDeepNeuralNetwork(
-    layer_sizes, use_shortcut=True
-)
-print_gradients(model_with_shortcut, sample_input)
-
-from chapter_3 import MultiHeadAttention
-
 
 class TransformerBlock(nn.Module):
     def __init__(self, cfg):
@@ -234,20 +137,17 @@ class TransformerBlock(nn.Module):
         self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
 
     def forward(self, x):
-        # Shortcut connection for attention block
         shortcut = x
         x = self.norm1(x)
-        x = self.att(x)  # Shape [batch_size, num_tokens, emb_size]
+        x = self.att(x)  
         x = self.drop_shortcut(x)
-        x = x + shortcut  # Add the original input back
+        x = x + shortcut  
 
-        # Shortcut connection for feed forward block
         shortcut = x
         x = self.norm2(x)
         x = self.ff(x)
         x = self.drop_shortcut(x)
-        x = x + shortcut  # Add the original input back
-
+        x = x + shortcut  
         return x
 
 class GPTModel(nn.Module):
@@ -269,70 +169,117 @@ class GPTModel(nn.Module):
         batch_size, seq_len = in_idx.shape
         tok_embeds = self.tok_emb(in_idx)
         pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
-        x = tok_embeds + pos_embeds  # Shape [batch_size, num_tokens, emb_size]
+        x = tok_embeds + pos_embeds  
         x = self.drop_emb(x)
         x = self.trf_blocks(x)
         x = self.final_norm(x)
         logits = self.out_head(x)
         return logits
 
-torch.manual_seed(123)
-model = GPTModel(GPT_CONFIG_124M)
-out = model(batch)
-print("Input batch:\n", batch)
-print("\nOutput shape:", out.shape)
-print(out)
-
-total_params = sum(p.numel() for p in model.parameters())
-print(f"Total number of parameters: {total_params:,}")
-
 def generate_text_simple(model, idx, max_new_tokens, context_size):
-    # idx is (batch, n_tokens) array of indices in the current context
     for _ in range(max_new_tokens):
-        
-        # Crop current context if it exceeds the supported context size
-        # E.g., if LLM supports only 5 tokens, and the context size is 10
-        # then only the last 5 tokens are used as context
         idx_cond = idx[:, -context_size:]
-        
-        # Get the predictions
         with torch.no_grad():
             logits = model(idx_cond)
-        
-        # Focus only on the last time step
-        # (batch, n_tokens, vocab_size) becomes (batch, vocab_size)
         logits = logits[:, -1, :]  
-
-        # Apply softmax to get probabilities
-        probas = torch.softmax(logits, dim=-1)  # (batch, vocab_size)
-
-        # Get the idx of the vocab entry with the highest probability value
-        idx_next = torch.argmax(probas, dim=-1, keepdim=True)  # (batch, 1)
-
-        # Append sampled index to the running sequence
-        idx = torch.cat((idx, idx_next), dim=1)  # (batch, n_tokens+1)
-
+        probas = torch.softmax(logits, dim=-1)  
+        idx_next = torch.argmax(probas, dim=-1, keepdim=True)  
+        idx = torch.cat((idx, idx_next), dim=1)  
     return idx
 
-start_context = "Hello, I am"
+# ====================================================================
+# EXECUTION GUARD: Everything below this line ONLY runs when you 
+# execute chapter_4.py directly, not when you import it into app.py
+# ====================================================================
+if __name__ == "__main__":
+    tokenizer = tiktoken.get_encoding("gpt2")
+    batch = []
+    txt1 = "Every effort moves you"
+    txt2 = "Every day holds a"
 
-encoded = tokenizer.encode(start_context)
-print("encoded:", encoded)
+    batch.append(torch.tensor(tokenizer.encode(txt1)))
+    batch.append(torch.tensor(tokenizer.encode(txt2)))
+    batch = torch.stack(batch, dim=0)
+    print(batch)
 
-encoded_tensor = torch.tensor(encoded).unsqueeze(0)
-print("encoded_tensor.shape:", encoded_tensor.shape)
+    torch.manual_seed(123)
+    dummy_model = DummyGPTModel(GPT_CONFIG_124M)
+    logits = dummy_model(batch)
+    print("Output shape:", logits.shape)
+    print(logits)
 
-model.eval() # disable dropout
+    torch.manual_seed(123)
+    batch_example = torch.randn(2, 5) 
 
-out = generate_text_simple(
-    model=model,
-    idx=encoded_tensor, 
-    max_new_tokens=6, 
-    context_size=GPT_CONFIG_124M["context_length"]
-)
+    layer = nn.Sequential(nn.Linear(5, 6), nn.ReLU())
+    out = layer(batch_example)
+    print(out)
 
-print("Output:", out)
-print("Output length:", len(out[0]))
+    mean = out.mean(dim=-1, keepdim=True)
+    var = out.var(dim=-1, keepdim=True)
+    print("Mean:\n", mean)
+    print("Variance:\n", var)
 
-decoded_text = tokenizer.decode(out.squeeze(0).tolist())
-print(decoded_text)
+    out_norm = (out - mean) / torch.sqrt(var)
+    print("Normalized layer outputs:\n", out_norm)
+
+    mean = out_norm.mean(dim=-1, keepdim=True)
+    var = out_norm.var(dim=-1, keepdim=True)
+    
+    torch.set_printoptions(sci_mode=False)
+    print("Mean:\n", mean)
+    print("Variance:\n", var)
+
+    ln = LayerNorm(emb_dim=5)
+    out_ln = ln(batch_example)
+    mean = out_ln.mean(dim=-1, keepdim=True)
+    var = out_ln.var(dim=-1, unbiased=False, keepdim=True)
+    print("Mean:\n", mean)
+    print("Variance:\n", var)
+
+    print(GPT_CONFIG_124M["emb_dim"])
+
+    ffn = FeedForward(GPT_CONFIG_124M)
+    x = torch.rand(2, 3, 768) 
+    out = ffn(x)
+    print(out.shape)
+
+    layer_sizes = [3, 3, 3, 3, 3, 1]  
+    sample_input = torch.tensor([[1., 0., -1.]])
+    torch.manual_seed(123)
+    model_with_shortcut = ExampleDeepNeuralNetwork(
+        layer_sizes, use_shortcut=True
+    )
+    print_gradients(model_with_shortcut, sample_input)
+
+    torch.manual_seed(123)
+    model = GPTModel(GPT_CONFIG_124M)
+    out = model(batch)
+    print("Input batch:\n", batch)
+    print("\nOutput shape:", out.shape)
+    print(out)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {total_params:,}")
+
+    start_context = "Hello, I am"
+    encoded = tokenizer.encode(start_context)
+    print("encoded:", encoded)
+
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+    print("encoded_tensor.shape:", encoded_tensor.shape)
+
+    model.eval() 
+
+    out = generate_text_simple(
+        model=model,
+        idx=encoded_tensor, 
+        max_new_tokens=6, 
+        context_size=GPT_CONFIG_124M["context_length"]
+    )
+
+    print("Output:", out)
+    print("Output length:", len(out[0]))
+
+    decoded_text = tokenizer.decode(out.squeeze(0).tolist())
+    print(decoded_text)
