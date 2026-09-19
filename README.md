@@ -5,7 +5,7 @@ Neuro-LLM is an end-to-end, custom-built Large Language Model (124M parameters) 
 
 The project spans the full machine learning lifecycle: from building a custom Hugging Face data streaming pipeline and coding causal multi-head attention mechanisms, to domain-adaptive pretraining, synthetic instruction data generation with Llama 3, and final deployment in a conversational Chainlit UI.
 
-![Neuro-LLM Roadmap](neuro-llm-roadmap.png)
+![Neuro-LLM Roadmap](Neuro-LLM.png)
 
 ## Tech Stack
 * **Framework:** PyTorch (MPS optimized for Apple Silicon)
